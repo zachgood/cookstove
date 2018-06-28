@@ -1,0 +1,239 @@
+---
+title: "Accelerometer Functions Vignette"
+author: "Zach Goodenow"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Accelerometer Functions Vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Vignette Info
+
+This Vignette describes the usage of accelerometer functions in `acc_fxns.R`.  These functions are used to load raw accelerometer data, condense, clean, and smooth the data so it can be used to describe a subject’s daily movement.
+
+The functions described include:
+
+- loadAccData() 
+- vecMag() 
+- makeMovement() 
+- makeCompliance() 
+- switchCompliance() 
+- switchFake() 
+- accToComp()
+
+## Install the cookstove package
+
+The first step of using these functions is to make sure the package has been installed and loaded.  The following code is used to install and load the functions from my local computer.
+
+PUT THE PACKAGE ON GITHUB AND SHOW HOW TO LOAD IT FROM THERE AFTER!!!!!!!!
+
+```{r, echo=TRUE, results="hide"}
+library("cookstove")
+# devtools::install_github("zachgood/cookstove")
+```
+
+## Load Raw Accelerometer Data
+
+Raw accelerometer data is assumed to be in the format straight from the device.  This data is in a .CSV file.  An example of this data from a single subject is in the `Example Data` folder, called `DATA-001.CSV` & `DATA-002.CSV`.  Use `loadAccData()` to load in this raw data as follows:
+
+```{r, cache=TRUE}
+path_to_acc_data_1 = "/Users/zachgoodenow/Desktop/Epi Research/cookstove/Example Data/DATA-001.CSV"
+path_to_acc_data_2 = "/Users/zachgoodenow/Desktop/Epi Research/cookstove/Example Data/DATA-002.CSV"
+accelerometer_data = loadAccData(fileName1 = path_to_acc_data_1, 
+                                 fileName2 = path_to_acc_data_2,
+                                 printHrs = TRUE)
+```
+
+After the data is loaded, it is in the form of a data frame with 4 colums.  Here is a look at the first 10 rows of this example data:
+
+```{r, echo=FALSE, results='asis'}
+knitr::kable(head(accelerometer_data, 10))
+```
+
+This raw data is very large, thus it is difficult to work with and visualize.  Here is a plot with the first 2 hours of data recorded:
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+row_end = min(which(accelerometer_data[,1] > 7200))
+xlab_loc = as.integer(seq(1, row_end, length.out = 9))
+xlab_names = c(0,15,30,45,60,75,90,105,120)
+
+plot(accelerometer_data[1:row_end, 2], 
+     col = "blue", type = "p", cex = 0.1, ylim = c(-5000, 5000),
+     main = "First 2 Hours of Data", ylab = "Acceleration \n Voltage (mV)", 
+     xaxt = "n", xlab = "Minutes into the day", cex.axis = 0.6)
+axis(side = 1, at = xlab_loc, labels = xlab_names, cex.axis = 0.6)
+points(accelerometer_data[1:row_end, 3], col = "green", type = "p", cex = 0.1)
+points(accelerometer_data[1:row_end, 4], col = "red", type = "p", cex = 0.1)
+legend("bottomright", legend = c("Ax", "Ay", "Az"), col = c("blue", "green", "red"),
+       pch = 19, bg = "white", cex = 0.6)
+```
+
+## Vector Magnitude Conversion
+
+THIS IS WHERE I NEED TO CITE DANES CODE and maybe say to install accelerometry package
+Dane calls the Y axis "Voltage (mV)" but Im not sure if that is accurate
+
+The next step in smoothing the data is to convert the raw data to vector magnitude values.  This conversion takes 3 key calculations which are handled by the `vecMag()` function.  The function should be used as follows:
+
+```{r, eval=FALSE}
+vm3 = vecMag(accelerometer_data)
+```
+
+Each calculation is explained individually, in depth, in the next 3 sections, but is the equivalent of using `vecMag()`
+
+### Step 1: Square Root of Sum of Squares
+
+The data from each axis (x, y, & z) is squared, summed together, then square rooted.  In other words, the columns are squared, the rows are summed, and the result is square rooted.  Thus, the data from each axis is combined which results in a single value for each recording from the accelerometer, rather than 3.  The code below shows this calculation and the following plot visualizes this translation for the first 2 hours.
+
+```{r}
+vm <- sqrt(accelerometer_data[, 2]^2 + 
+             accelerometer_data[, 3]^2 +
+             accelerometer_data[, 4]^2)
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(vm[1:row_end], type = "p", cex = 0.1, 
+     ylim = c(0, 5000), xaxt = "n", cex.axis = 0.6,
+     main = "First 2 Hours of Data \n Square Root of Sum of Squares",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Minutes into the day")
+axis(side = 1, at = xlab_loc, labels = xlab_names, cex.axis = 0.6)
+```
+
+#### Step 2: Subtract Mode & Take Absolute Value
+
+The mode of the data is subtracted from each point followed by taking the absolute value.  This brings the data down to the X axis and "folds" the data to make it positive.  Thus, each point represents the magnitude of movement relative to 0; small values indicate little movement while large values indicate large movement.  The code below shows this calculation and the following plot visualizes this translation for the first 2 hours.
+
+```{r}
+vm2 <- vm - as.numeric(names(sort(table(vm), decreasing = TRUE))[1])  # subtract mode
+vm2 <- abs(vm2)
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(vm2[1:row_end], type = "p", cex = 0.1, 
+     ylim = c(0, 5000), xaxt = "n", cex.axis = 0.6,
+     main = "First 2 Hours of Data \n Subtract Mode & Take Absolute Value",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Minutes into the day")
+axis(side = 1, at = xlab_loc, labels = xlab_names, cex.axis = 0.6)
+```
+
+#### Step 3: Convert to 1-minute Data Points
+
+The data is now condensed by taking the average in blocks of 1 minute.  Thus, each data point represents the movement for 1 minute of time.  This calculation is done using the `blockavs()` function from the `accelerometry` package.  The amount of time recorded in each accelerometer dataset differs, which means the window length must be calculated.   The code below shows this calculation and the following plots visualize this translation for the first 2 hours and the entire data set.
+
+```{r}
+window_len <- nrow(accelerometer_data) / (accelerometer_data[nrow(accelerometer_data),1]/60)
+vm3 <- accelerometry::blockaves(x = vm2, window = window_len) * 12 * 60
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(vm3[1:125], type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "First 2 Hours of Data \n 1 Minute Block Average",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Minutes into the day")
+axis(side = 1, at = seq(0,120,15), labels = seq(0,120,15), cex.axis = 0.6)
+```
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(vm3, type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "All Data \n 1 Minute Block Average",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Hours into the day")
+axis(side = 1, at = seq(0,1800,120), labels = seq(0,30,2), cex.axis = 0.6)
+```
+
+Notice that the length of this new list represents the amount of minutes recorded, and if you devide by 60, this is the amount of hours recorded.  To check that no data has been lost, we can compare this to the hours recorded by the raw data.  When the raw data was loaded in, it was reported that 26.851 hours worth of data was recorded.
+
+```{r}
+round(length(vm3)/60, 3)
+```
+
+
+## Movement Conversion
+
+To further smooth the data, each data point can be evaluated relative to those around it.  This calculation is performed by the `makeMovement()` function and involves taking a rolling standard deviation.  
+
+The reason for this step is because taking the block average sometimes results in large values for times when the accelerometer is actually not moving at all.  This could be due to the angle that the monitor is resting or various other reasons.  When you take the rolling standard deviation, it shows the spread of consecutive data points.  Sporadically spaced data points create larger values and repetitive data points create small values.  Thus, the data more closely resemble continuous movement.
+
+```{r}
+movement = makeMovement(vm3)
+# Same as movement = makeMovement(vm3, rollLength = 5)
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(movement[1:125], type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "First 2 Hours of Data \n rolling standard deviation",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Minutes into the day")
+axis(side = 1, at = seq(0,120,15), labels = seq(0,120,15), cex.axis = 0.6)
+```
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(movement, type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "All Data \n rolling standard deviation",
+     ylab = "Movement", xlab = "Hours into the day")
+axis(side = 1, at = seq(0,1800,120), labels = seq(0,30,2), cex.axis = 0.6)
+```
+
+
+## Compliance Conversion
+
+Threshold at 400 after threshold testing but can be passed as an argument in `makeCompliance` if a different threshold is desired. 
+
+```{r}
+compliance = makeCompliance(movement)
+# Same as compliance = makeCompliance(movement, threshold = 400)
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(compliance[1:125], type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "First 2 Hours of Compliance",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Minutes into the day")
+axis(side = 1, at = seq(0,120,15), labels = seq(0,120,15), cex.axis = 0.6)
+```
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(compliance, type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "All Compliance",
+     ylab = "Movement", xlab = "Hours into the day")
+axis(side = 1, at = seq(0,1800,120), labels = seq(0,30,2), cex.axis = 0.6)
+```
+
+
+## Remove fake compliance
+
+Done using the `switchFake` function.  This function uses the `switchCompliance()` twice; first to It uses the `switchCompliance()` function twice; first with `nonToComp = TRUE` & second with `nonToComp = FALSE`.  `nonToComp = TRUE` is preformed first to error on the side of compliance but this can be controled by the `nonCompFirst` boolean arguement.  `seqLen` controls the length of acceptable compliance type and is default to 10, meaning 10 minutes.
+
+```{r}
+compliance_no_misclass = switchFake(compliance) 
+# Same as compliance_no_misclass = switchFake(compliance, seqLen = 10, nonCompFirst = TRUE)
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(compliance_no_misclass[1:125], type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "First 2 Hours of Compliance w/o Fake",
+     ylab = "Acceleration \n Voltage (mV)", xlab = "Minutes into the day")
+axis(side = 1, at = seq(0,120,15), labels = seq(0,120,15), cex.axis = 0.6)
+```
+```{r, echo=FALSE, fig.height=3, fig.width=7, fig.align="center", cache=TRUE}
+plot(compliance_no_misclass, type = "p", xaxt = "n", cex.axis = 0.6,
+     main = "All Compliance w/o Fake",
+     ylab = "Movement", xlab = "Hours into the day")
+axis(side = 1, at = seq(0,1800,120), labels = seq(0,30,2), cex.axis = 0.6)
+```
+
+
+## All functions wrapped into one
+
+This function does all the previous work but in one function call. `cut24` is used to control if the returned data is cut to be 24 hours exactly.  `attachHours` controls the attachment of hours recorded in the raw data
+
+```{r}
+path_to_acc_data_1 = "/Users/zachgoodenow/Desktop/Epi Research/cookstove/Example Data/DATA-001.CSV"
+path_to_acc_data_2 = "/Users/zachgoodenow/Desktop/Epi Research/cookstove/Example Data/DATA-002.CSV"
+df = accToComp(path_to_acc_data_1, path_to_acc_data_2, 
+               cut24 = TRUE, attachHours = TRUE) 
+
+df[1] # Hours recorded
+
+length(df[2]) # Minutes of resulting data
+
+
+```
+
+
+
