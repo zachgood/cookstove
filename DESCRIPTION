@@ -1,0 +1,21 @@
+Package: cookstove
+Type: Package
+Title: Manipulate & Analyze Data From Honduras Cookstove Research Project 
+Version: 0.1.0
+Author: Zach J Goodenow
+Maintainer: Zach J Goodenow <zachgood@rams.colostate.edu>
+Description: This package has functions that can be applied to carbon monoxide & accelerometer data.  This data was collected by a team of researchers from Colorado State University.  Each subject is a woman in a rural area of Honduras.  Data was collect on each subject to describe their levels of carbon monoxide intake & movement.  Subjects wore a bag with monitors that collected individual carbon monoxide intake & personal movement (via accelerometer).  Carbon monoxide data is output into a text file.  Accelerometer data is output into a CSV file.
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Imports:
+	utils (>= 3.2.2),
+	roxygen2,
+	accelerometry,
+	roll,
+	dplyr,
+	magrittr
+RoxygenNote: 6.0.1
+Suggests: knitr,
+    rmarkdown
+VignetteBuilder: knitr
